@@ -60,6 +60,12 @@ See the example GPU pod for mounting the storage.
 
 The storage is exposed to the web via a S3 interface. You will get your access key and secret from the cluster admin.
 The bucket `taurusd` is synchronized with the `/taurusd` mount shown in the GPU pod.
-`rclone` is recommended to deal with S3. `rclone copy /local/file/or/directory endpointname:/taurusd/remote/dir -P`.
-`rclone lsf endpointname:/taurusd/remote/dir` can list the directories (`ls` instead of `lsf` will list recursively).
-You can also mount the directory as `rclone mount endpointname:/taurusd/ /mount/point --no-modtime`. But if your path contains large directories the access would be slow.
+
+`rclone` is recommended to deal with S3. `rclone --ca-cert weka.crt copy /local/file/or/directory endpointname:/taurusd/remote/dir -P`.
+`rclone --ca-cert weka.crt lsf endpointname:/taurusd/remote/dir` can list the directories (`ls` instead of `lsf` will list recursively).
+You can also mount the directory as `rclone --ca-cert weka.crt mount endpointname:/taurusd/ /mount/point --no-modtime`. But if your path contains large directories the access would be slow.
+You can also mount a small sub-directory if you like.
+
+`weka.crt` can be downloaded from this repository. For `aws`, it needs to be specified as `--ca-bundle weka.crt`.
+
+Do not create other buckets. The files will not be available on the FS and may be deleted at any time.
