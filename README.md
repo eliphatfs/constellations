@@ -69,3 +69,7 @@ You can also mount a small sub-directory if you like.
 `weka.crt` can be downloaded from this repository. For `aws`, it needs to be specified as `--ca-bundle weka.crt`.
 
 Do not create other buckets. The files will not be available on the FS and may be deleted at any time.
+
+## Caveat
+
+Current persistent storage cannot be mounted on CPU nodes. If you are debugging, make sure you are selecting the GPU nodes via the nodeSelector `node.kubernetes.io/instance-type: BM.GPU.H100.8`.
