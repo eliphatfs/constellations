@@ -61,7 +61,7 @@ See the example GPU pod for mounting the storage.
 The storage is exposed to the web via a S3 interface.
 The bucket `taurusd` is synchronized with the `/taurusd` mount shown in the GPU pod.
 
-### RClone Quick Start
+### Rclone Quick Start
 
 `rclone` is recommended to deal with S3. You can install with `apt install rclone` or download from their website https://rclone.org/downloads/.
 
