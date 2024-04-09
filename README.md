@@ -60,6 +60,8 @@ spec:
 
 ### RoCE and Cross-node Workload
 
+**Note: k8s is a sequential scheduler which means it can spin up your workload nodes separately if there is no sufficient resources.**
+
 For a cross-node workload, there are two parts: a way to discover the other nodes inside the workload; and how to configure each workload.
 
 Discovery is implemented using k8s headless services. It essentially finds the master node (with rank 0) and sets up DNS to it.
