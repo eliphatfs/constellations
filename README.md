@@ -272,7 +272,7 @@ rclone can also run as a remote rsync. `rclone  --ca-cert weka.crt sync local-di
 
 ### Caveat
 
-Current persistent storage cannot be mounted on CPU nodes. If you are debugging, make sure you are selecting the GPU nodes via the nodeSelector `node.kubernetes.io/instance-type: BM.GPU.H100.8`.
+Current persistent storage cannot be mounted on CPU nodes. If you are not requesting GPU in workloads such as SSH and data transfer, make sure you are selecting the GPU nodes via the nodeSelector `node.kubernetes.io/instance-type: BM.GPU.H100.8`.
 
 Add this to the pod spec (same level with `volumes`):
 ```
