@@ -58,25 +58,52 @@ RoCE discovery and configurations are yet to be figured out.
 The current storage is backed by WEKA, and can support high-performance small-file IO.
 See the example GPU pod for mounting the storage.
 
-The storage is exposed to the web via a S3 interface. You will get your access key and secret from the cluster admin.
+The storage is exposed to the web via a S3 interface.
 The bucket `taurusd` is synchronized with the `/taurusd` mount shown in the GPU pod.
 
-S3 endpoint URL: https://taurus-s3.skis.ltd:9033
+### RClone Quick Start
 
-`rclone` is recommended to deal with S3. `rclone --ca-cert weka.crt copy /local/file/or/directory endpointname:/taurusd/remote/dir -P`.
-`rclone --ca-cert weka.crt lsf endpointname:/taurusd/remote/dir` can list the directories (`ls` instead of `lsf` will list recursively).
+`rclone` is recommended to deal with S3. You can install with `apt install rclone` or download from their website https://rclone.org/downloads/.
+
+Run `rclone config` and add a new backend.
+
+Storage: Amazon S3 Compliant Storage Providers (enter `s3`)
+S3 provider: Other
+Access key: You will get your access key and secret from the cluster admin.
+Endpoint: https://taurus-s3.skis.ltd:9033
+
+**Copy:** `rclone --ca-cert weka.crt copy /local/file/or/directory endpointname:/taurusd/remote/dir -P`.
+
+**List:** `rclone --ca-cert weka.crt lsf endpointname:/taurusd/remote/dir` can list the directories (`ls` instead of `lsf` will list recursively).
+
+**Mount:**
 You can also mount the directory as `rclone --ca-cert weka.crt mount endpointname:/taurusd/ /mount/point --no-modtime`. But if your path contains large directories the access would be slow.
 You can also mount a small sub-directory if you like. You can set Other as the provider when using rclone config.
 
+**Performance and Limitations:**
 There is a limit on chunk sizes and number of chunks per file currently. There cannot be more than 10000 chunks, and the chunk size is required to be within 5MiB to 5GiB. `rclone` defaults to 5MiB.
 If you are uploading a single file larger than 50GB, add `--s3-chunk-size 100M`.
 If you are uploading a single file larger than 1TiB, think again and don't do that.
 It is recommended to keep the file chunks fewer than 1000 for the best performance, i.e. it is recommended to increase the chunk size if your file is about or larger than 5GB.
 
+**Sync:**
+rclone can also run as a remote rsync. `rclone  --ca-cert weka.crt sync local-directory-or-file endpointname:/taurusd/your/target/directory -P`.
+
+**weka.crt**
 `weka.crt` can be downloaded from this repository. For `aws`, it needs to be specified as `--ca-bundle weka.crt`.
 
-Do not create other buckets. The files will not be available on the FS and may be deleted at any time.
+**Do not create other buckets. The files will not be available on the FS and may be deleted at any time.**
 
-## Caveat
+### Caveat
 
 Current persistent storage cannot be mounted on CPU nodes. If you are debugging, make sure you are selecting the GPU nodes via the nodeSelector `node.kubernetes.io/instance-type: BM.GPU.H100.8`.
+
+Add this to the pod spec (same level with `volumes`):
+```
+tolerations:
+  - effect: NoSchedule
+    key: nvidia.com/gpu
+    operator: Exists
+nodeSelector:
+  node.kubernetes.io/instance-type: BM.GPU.H100.8
+```
