@@ -73,6 +73,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get -q install -y -f build-essential pkg-config vlan automake autoconf dkms git libibverbs* librdma* libibmad.* libibumad* libtool ibutils ibverbs-utils rdmacm-utils infiniband-diags perftest librdmacm-dev libibverbs-dev numactl libnuma-dev libnl-3-200 libnl-route-3-200 libnl-route-3-dev libnl-utils ibutils
 ```
 
+Replace `<your-exp-name>` and `<your-account-name>` in the config.
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -146,7 +148,7 @@ spec:
           # you can play around them if you want, but the settings here should be okay for the most times
           env:
             - name: MASTER_ADDR
-              value: example-multinode-discovery
+              value: <your-exp-name>-discovery
             - name: MASTER_PORT
               value: "6006"
             - name: NCCL_NET
