@@ -71,6 +71,7 @@ You can also mount a small sub-directory if you like. You can set Other as the p
 There is a limit on chunk sizes and number of chunks per file currently. There cannot be more than 10000 chunks, and the chunk size is required to be within 5MiB to 5GiB. `rclone` defaults to 5MiB.
 If you are uploading a single file larger than 50GB, add `--s3-chunk-size 100M`.
 If you are uploading a single file larger than 1TiB, think again and don't do that.
+It is recommended to keep the file chunks fewer than 1000 for the best performance, i.e. it is recommended to increase the chunk size if your file is about or larger than 5GB.
 
 `weka.crt` can be downloaded from this repository. For `aws`, it needs to be specified as `--ca-bundle weka.crt`.
 
