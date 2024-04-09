@@ -236,7 +236,11 @@ spec:
 The current storage is backed by WEKA, and can support high-performance small-file IO.
 See the example GPU pod for mounting the storage.
 
+### Data Transfer.
+
 The storage is exposed to the web via a S3 interface.
+(The S3 interface is to replace the data transfer service on the old clusters.)
+
 The bucket `taurusd` is synchronized with the `/taurusd` mount shown in the GPU pod.
 
 ### Rclone Quick Start
