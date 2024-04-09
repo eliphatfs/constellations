@@ -68,8 +68,11 @@ The bucket `taurusd` is synchronized with the `/taurusd` mount shown in the GPU 
 Run `rclone config` and add a new backend.
 
 Storage: Amazon S3 Compliant Storage Providers (enter `s3`)
+
 S3 provider: Other
+
 Access key: You will get your access key and secret from the cluster admin.
+
 Endpoint: https://taurus-s3.skis.ltd:9033
 
 **Copy:** `rclone --ca-cert weka.crt copy /local/file/or/directory endpointname:/taurusd/remote/dir -P`.
