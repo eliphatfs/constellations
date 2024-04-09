@@ -68,6 +68,10 @@ S3 endpoint URL: https://taurus-s3.skis.ltd:9033
 You can also mount the directory as `rclone --ca-cert weka.crt mount endpointname:/taurusd/ /mount/point --no-modtime`. But if your path contains large directories the access would be slow.
 You can also mount a small sub-directory if you like. You can set Other as the provider when using rclone config.
 
+There is a limit on chunk sizes and number of chunks per file currently. There cannot be more than 10000 chunks, and the chunk size is required to be within 5MiB to 5GiB. `rclone` defaults to 5MiB.
+If you are uploading a single file larger than 50GB, add `--s3-chunk-size 100M`.
+If you are uploading a single file larger than 1TiB, think again and don't do that.
+
 `weka.crt` can be downloaded from this repository. For `aws`, it needs to be specified as `--ca-bundle weka.crt`.
 
 Do not create other buckets. The files will not be available on the FS and may be deleted at any time.
