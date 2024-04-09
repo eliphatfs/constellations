@@ -14,6 +14,15 @@ export KUBECONFIG=<path/to/config>
 
 to set the current kubectl config for the terminal session.
 
+## Workloads
+
+Submitting workloads are similar to Nautilus as we are both using Kubernetes.
+You can use pods, jobs and deployments.
+
+### Limit Range Policy
+
+To avoid oversubscription, we currently require memory limit to be the same as requests, and CPU limit be within 1.0x to 1.5x of requests.
+
 ### Example GPU pod
 
 ```yaml
@@ -49,9 +58,174 @@ spec:
         medium: Memory
 ```
 
-### Cross-node Workload
+### RoCE and Cross-node Workload
 
-RoCE discovery and configurations are yet to be figured out.
+For a cross-node workload, there are two parts: a way to discover the other nodes inside the workload; and how to configure each workload.
+
+Discovery is implemented using k8s headless services. It essentially finds the master node (with rank 0) and sets up DNS to it.
+
+Remember to delete the service after you finish with your job. You can use `kubectl delete -f <yaml>` for that.
+
+The container image is required to have IB support to use RoCE. If not, you can install with
+
+```bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get -q install -y -f build-essential pkg-config vlan automake autoconf dkms git libibverbs* librdma* libibmad.* libibumad* libtool ibutils ibverbs-utils rdmacm-utils infiniband-diags perftest librdmacm-dev libibverbs-dev numactl libnuma-dev libnl-3-200 libnl-route-3-200 libnl-route-3-dev libnl-utils ibutils
+```
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: <your-exp-name>-discovery
+spec:
+  clusterIP: None
+  selector:
+    job-name: <your-exp-name>-job
+    completion-index: "0"
+  ports:
+    - protocol: TCP
+      port: 6006
+      targetPort: 6006
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: <your-exp-name>-job
+spec:
+  completions: 2  # node count here
+  parallelism: 2  # node count here
+  completionMode: Indexed
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      # this is necessary for RoCE to attach!
+      annotations:
+        k8s.v1.cni.cncf.io/networks: oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov,oci-rdma-sriov
+    spec:
+      # if you forget your account name, ask the cluster admin
+      serviceAccount: <your-account-name>
+      # an init container is used to tag the pod with its rank for service discovery
+      initContainers:
+        - command:
+            - /bin/bash
+            - -c
+            - |
+              kubectl label pod ${POD_NAME} completion-index=${JOB_COMPLETION_INDEX}
+          image: aga.ocir.io/hpc_limited_availability/oke/kubectl:latest
+          name: discovery-setup
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+      # the main workload comes here
+      containers:
+        - name: gpu-container
+          image: eliphatfs/zero123plus:0.20.2-ib
+          command: ["/bin/bash"]
+          # a minimal example. change to your actual workload.
+          args:
+            - "-c"
+            - |
+              cd;
+              env | grep JOB_COMPLETION_INDEX;
+              env | grep MASTER_ADDR;
+              ulimit -a;
+              apt -qq update && apt -q install -y git >/dev/null;
+              git clone https://github.com/eliphatfs/minimal-ddp-example.git &&
+              cd minimal-ddp-example &&
+              NCCL_DEBUG="INFO" python -m torch.distributed.launch \
+                --nnodes 2 \
+                --nproc-per-node 8 \
+                --master-port ${MASTER_PORT} \
+                --master-addr ${MASTER_ADDR} \
+                --node-rank ${JOB_COMPLETION_INDEX} \
+                minimal_ddp.py
+          # flags starting from `NCCL_NET` are recommended configurations from Oracle team
+          # you can play around them if you want, but the settings here should be okay for the most times
+          env:
+            - name: MASTER_ADDR
+              value: example-multinode-discovery
+            - name: MASTER_PORT
+              value: "6006"
+            - name: NCCL_NET
+              value: "IB"
+            - name: NCCL_CROSS_NIC
+              value: "0"
+            - name: NCCL_SOCKET_NTHREADS
+              value: "16"
+            - name: NCCL_CUMEM_ENABLE
+              value: "0"
+            - name: NCCL_IB_SPLIT_DATA_ON_QPS
+              value: "0"
+            - name: NCCL_IB_QPS_PER_CONNECTION
+              value: "16"
+            - name: NCCL_IB_GID_INDEX
+              value: "3"
+            - name: NCCL_IB_TC
+              value: "41"
+            - name: NCCL_IB_SL
+              value: "0"
+            - name: NCCL_IB_TIMEOUT
+              value: "22"
+            - name: NCCL_NET_PLUGIN
+              value: "0"
+            - name: HCOLL_ENABLE_MCAST_ALL
+              value: "0"
+            - name: coll_hcoll_enable
+              value: "0"
+            - name: UCX_TLS
+              value: "tcp"
+            - name: UCX_NET_DEVICES
+              value: "eth0"
+            - name: RX_QUEUE_LEN
+              value: "8192"
+            - name: IB_RX_QUEUE_LEN
+              value: "8192"
+            - name: NCCL_SOCKET_IFNAME
+              value: "eth0"
+            - name: NCCL_IGNORE_CPU_AFFINITY
+              value: "1"
+            - name: NCCL_TOPO_FILE
+              value: "/topo/topo.xml"
+          # partial requests for GPU and SRIOV devices are not supported for cross-node RoCE workloads. Specify 8 and 16, respectively.
+          resources:
+            requests:
+              cpu: "64"
+              memory: "128Gi"
+              nvidia.com/gpu: "8"
+              nvidia.com/sriov_rdma_vf: "16"
+              ephemeral-storage: 300Gi
+            limits:
+              cpu: "64"
+              memory: "128Gi"
+              nvidia.com/gpu: "8"
+              nvidia.com/sriov_rdma_vf: "16"
+              ephemeral-storage: 300Gi
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: taurusd-pvc
+              mountPath: /taurusd
+            - name: topo
+              mountPath: /topo
+      volumes:
+        - name: taurusd-pvc
+          persistentVolumeClaim:
+            claimName: taurusd-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+        - name: topo
+          configMap:
+            name: nccl-topology
+            items:
+            - key: topo.xml
+              path: topo.xml
+      restartPolicy: Never
+  backoffLimit: 0  # The number of attempts to restart after crash
+```
 
 ## Persistent Storage
 
