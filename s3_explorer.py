@@ -3,7 +3,7 @@ import sys
 import html
 import boto3
 import boto3.s3
-from urllib.parse import urlparse, parse_qsl, quote
+from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 s3_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
@@ -133,7 +133,7 @@ class S3Explorer(BaseHTTPRequestHandler):
         else:
             self.send_response(200)
             self.end_headers()
-            s3.download_fileobj(s3_bucket, uri.path.strip("/"), self.wfile)
+            s3.download_fileobj(s3_bucket, unquote(uri.path.strip("/")), self.wfile)
 
 
 if __name__ == '__main__':
