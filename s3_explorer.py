@@ -13,7 +13,12 @@ s3_secret = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 s3 = boto3.client('s3', endpoint_url=s3_endpoint, aws_access_key_id=s3_key, aws_secret_access_key=s3_secret)
 
 dir_item = '<li class="list-group-item d-flex justify-content-between align-items-center"><a href="/?path={path}">{name}</a></li>'
-file_item = '<li class="list-group-item d-flex justify-content-between align-items-center"><a href="/{path}">{name}</a><a href="/share?path={path}&exp=600" class="badge text-bg-primary">Share</a></li>'
+file_item = '''
+<li class="list-group-item d-flex justify-content-between align-items-center">
+<span><a href="/{path}">{name}</a></span>
+<span><span class="text-body-secondary me-4">{size}</span><a href="/share?path={path}&exp=600" class="badge text-bg-primary">Share</a></span>
+</li>
+'''.strip()
 page_base_format = """
 <!DOCTYPE html>
 <html>
@@ -104,9 +109,18 @@ class S3Explorer(BaseHTTPRequestHandler):
                 data.append(dir_item.format(path=qt, name=name))
             for item in res.get('Contents', []):
                 key = item['Key']
+                sz = item['Size']
+                if sz > 1000 ** 3:
+                    ss = '%.1f GB' % (sz / (1000 ** 3))
+                elif sz > 1000 ** 2:
+                    ss = '%.1f MB' % (sz / (1000 ** 2))
+                elif sz > 1000 ** 1:
+                    ss = '%.1f KB' % (sz / (1000 ** 1))
+                else:
+                    ss = '%d B' % sz
                 qt = quote(key)
                 name = html.escape(os.path.basename(key))
-                data.append(file_item.format(path=qt, name=name))
+                data.append(file_item.format(path=qt, name=name, size=ss))
             nextdisabled = 'disabled'
             marker = ''
             if res['IsTruncated']:
