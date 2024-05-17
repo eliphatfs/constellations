@@ -1,8 +1,10 @@
 import os
 import sys
+import time
 import html
 import boto3
 import boto3.s3
+import threading
 from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -25,6 +27,7 @@ page_base_format = """
 <head>
 <title>S3 Explorer</title>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMjQgMjQiPjxwYXRoIGZpbGw9IiM4ODg4ODgiIGQ9Ik01IDIxTDMgOWgxOGwtMiAxMnptNS02aDRxLjQyNSAwIC43MTMtLjI4OFQxNSAxNHQtLjI4OC0uNzEyVDE0IDEzaC00cS0uNDI1IDAtLjcxMi4yODhUOSAxNHQuMjg4LjcxM1QxMCAxNU02IDhxLS40MjUgMC0uNzEyLS4yODhUNSA3dC4yODgtLjcxMlQ2IDZoMTJxLjQyNSAwIC43MTMuMjg4VDE5IDd0LS4yODguNzEzVDE4IDh6bTItM3EtLjQyNSAwLS43MTItLjI4OFQ3IDR0LjI4OC0uNzEyVDggM2g4cS40MjUgMCAuNzEzLjI4OFQxNyA0dC0uMjg4LjcxM1QxNiA1eiIvPjwvc3ZnPg==">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </head>
@@ -66,6 +69,12 @@ page_base_format = """
 </body>
 </html>
 """
+
+
+def keepalive():
+    while True:
+        time.sleep(5)
+        s3.head_bucket(Bucket=s3_bucket)
 
 
 def sign_for_file(path, expire_time=600):
@@ -151,6 +160,7 @@ class S3Explorer(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    threading.Thread(target=keepalive, daemon=True).start()
     with ThreadingHTTPServer(('127.0.0.1', 9092), S3Explorer) as server:
         print("Serving at http://127.0.0.1:9092")
         server.serve_forever()
