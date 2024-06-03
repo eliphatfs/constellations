@@ -24,7 +24,7 @@ for pod in pods.items:
 for node in nodes.items:
     node: client.V1Node
     try:
-        node_avail = node_total = int(node.metadata.labels.get('nvidia.com/gpu.count'))
+        node_avail = node_total = int(node.status.allocatable.get('nvidia.com/gpu'))
         here = []
         for pod in usingPods[node.metadata.name]:
             try:
