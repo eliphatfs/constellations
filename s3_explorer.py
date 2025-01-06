@@ -4,6 +4,7 @@ import time
 import html
 import boto3
 import boto3.s3
+import requests
 import threading
 from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -154,9 +155,24 @@ class S3Explorer(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(sign_for_file(p.strip("/"), e).encode())
         else:
-            self.send_response(200)
+            if 'Range' in self.headers:
+                headers = {'Range': self.headers['Range']}
+            else:
+                headers = None
+            key = sign_for_file(unquote(uri.path.strip("/")), 1800)
+            resp = requests.get(key, headers=headers, stream=True)
+            self.send_response(resp.status_code)
+            # print(resp.headers['content-type'])
+            for k, v in resp.headers.items():
+                if k.lower() in ['etag', 'last-modified', 'date', 'server']:
+                    continue
+                if k.lower() == 'content-type' and v.lower() in ['application/octet-stream', 'application/x-sh']:
+                    continue
+                self.send_header(k, v)
             self.end_headers()
-            s3.download_fileobj(s3_bucket, unquote(uri.path.strip("/")), self.wfile)
+            for chunk in resp.iter_content(chunk_size=8192):  # Iterate over chunks
+                if chunk:  # Filter out keep-alive new chunks
+                    self.wfile.write(chunk)
 
 
 if __name__ == '__main__':
