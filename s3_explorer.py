@@ -160,7 +160,7 @@ class S3Explorer(BaseHTTPRequestHandler):
             else:
                 headers = None
             key = sign_for_file(unquote(uri.path.strip("/")), 1800)
-            resp = requests.get(key, headers=headers, stream=True)
+            resp = requests.get(key, headers=headers, stream=True, verify=os.getenv("AWS_CA_BUNDLE"))
             self.send_response(resp.status_code)
             # print(resp.headers['content-type'])
             for k, v in resp.headers.items():
