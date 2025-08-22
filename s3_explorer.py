@@ -4,7 +4,10 @@ import time
 import html
 import boto3
 import boto3.s3
+import boto3.s3.transfer
+import humanize
 import requests
+import mimetypes
 import threading
 from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -19,7 +22,11 @@ dir_item = '<li class="list-group-item d-flex justify-content-between align-item
 file_item = '''
 <li class="list-group-item d-flex justify-content-between align-items-center">
 <span><a href="/{path}">{name}</a></span>
-<span><span class="text-body-secondary me-4">{size}</span><a href="/share?path={path}&exp=600" class="badge text-bg-primary">Share</a></span>
+<span>
+    <span class="text-body-secondary me-3">{size}</span>
+    <span class="text-body-secondary me-4">{modified}</span>
+    <a href="/share?path={path}&exp=600" class="badge text-bg-primary">Share</a>
+</span>
 </li>
 '''.strip()
 page_base_format = """
@@ -78,10 +85,19 @@ def keepalive():
         s3.head_bucket(Bucket=s3_bucket)
 
 
+def get_bucket_path(p):
+    if s3_bucket == '__dynamic__':
+        bucket, p = p.split('/', maxsplit=1)
+    else:
+        bucket = s3_bucket
+    return bucket, p
+
+
 def sign_for_file(path, expire_time=600):
+    bucket, dp = get_bucket_path(path)
     return s3.generate_presigned_url('get_object',
-                                     Params={'Bucket': s3_bucket,
-                                             'Key': path},
+                                     Params={'Bucket': bucket,
+                                             'Key': dp},
                                      ExpiresIn=expire_time)
 
 
@@ -97,29 +113,44 @@ class S3Explorer(BaseHTTPRequestHandler):
             m = qs.get('marker', None)
             f = qs.get('filter', '')
             p += f
-            if m is None:
+            if s3_bucket == '__dynamic__' and not len(p):
+                res = s3.list_buckets(
+                    MaxBuckets=500
+                )
+            elif m is None:
+                bucket, dp = get_bucket_path(p)
                 res = s3.list_objects_v2(
-                    Bucket=s3_bucket,
+                    Bucket=bucket,
                     Delimiter='/',
-                    Prefix=p
+                    Prefix=dp
                 )
             else:
+                bucket, dp = get_bucket_path(p)
                 res = s3.list_objects_v2(
-                    Bucket=s3_bucket,
+                    Bucket=bucket,
                     Delimiter='/',
-                    Prefix=p,
+                    Prefix=dp,
                     ContinuationToken=m
                 )
             data = []
             data.append(dir_item.format(path=quote(os.path.dirname(os.path.dirname(p))), name='..'))
+            for item in res.get('Buckets', []):
+                key = item['Name']
+                qt = quote(key)
+                name = html.escape(os.path.basename(key) + '/')
+                data.append(dir_item.format(path=qt, name=name))
             for item in res.get('CommonPrefixes', []):
                 key = item['Prefix']
+                if s3_bucket == '__dynamic__':
+                    key = bucket + '/' + key
                 qt = quote(key)
                 name = html.escape(os.path.basename(os.path.dirname(key)) + '/')
                 data.append(dir_item.format(path=qt, name=name))
+            # items_stage = []
             for item in res.get('Contents', []):
                 key = item['Key']
                 sz = item['Size']
+                modified = item['LastModified']
                 if sz > 1000 ** 3:
                     ss = '%.1f GB' % (sz / (1000 ** 3))
                 elif sz > 1000 ** 2:
@@ -128,12 +159,15 @@ class S3Explorer(BaseHTTPRequestHandler):
                     ss = '%.1f KB' % (sz / (1000 ** 1))
                 else:
                     ss = '%d B' % sz
+                if s3_bucket == '__dynamic__':
+                    key = bucket + '/' + key
                 qt = quote(key)
                 name = html.escape(os.path.basename(key))
-                data.append(file_item.format(path=qt, name=name, size=ss))
-            nextdisabled = 'disabled'
+                # items_stage.append((qt, name, ss, humanize.naturaltime(modified)))
+                data.append(file_item.format(path=qt, name=name, size=ss, modified=humanize.naturaltime(modified)))
+            nextdisabled = 'hidden'
             marker = ''
-            if res['IsTruncated']:
+            if res.get('IsTruncated', False):
                 nextdisabled = ''
                 marker = res['NextContinuationToken']
             self.send_response(200)
@@ -164,9 +198,13 @@ class S3Explorer(BaseHTTPRequestHandler):
             self.send_response(resp.status_code)
             # print(resp.headers['content-type'])
             for k, v in resp.headers.items():
-                if k.lower() in ['etag', 'last-modified', 'date', 'server']:
+                if k.lower() in ['etag', 'last-modified', 'date', 'server', 'x-content-type-options']:
                     continue
-                if k.lower() == 'content-type' and v.lower() in ['application/octet-stream', 'application/x-sh']:
+                if k.lower() == 'content-type':
+                    ty, _ = mimetypes.guess_type(key, strict=False)
+                    if ty is not None and ty not in ['application/x-sh']:
+                        self.send_header(k, ty)
+                    print(k, v, ty)
                     continue
                 self.send_header(k, v)
             self.end_headers()
@@ -176,7 +214,8 @@ class S3Explorer(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    threading.Thread(target=keepalive, daemon=True).start()
-    with ThreadingHTTPServer(('127.0.0.1', 9092), S3Explorer) as server:
+    if s3_bucket != '__dynamic__':
+        threading.Thread(target=keepalive, daemon=True).start()
+    with ThreadingHTTPServer(('0.0.0.0', 9092), S3Explorer) as server:
         print("Serving at http://127.0.0.1:9092")
         server.serve_forever()
