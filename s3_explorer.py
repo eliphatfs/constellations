@@ -11,12 +11,37 @@ import mimetypes
 import threading
 from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from botocore.config import Config
 
 s3_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
 s3_bucket = sys.argv[-1] if len(sys.argv) > 1 else ""
 s3_key = os.getenv("AWS_ACCESS_KEY_ID", "")
 s3_secret = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-s3 = boto3.client('s3', endpoint_url=s3_endpoint, aws_access_key_id=s3_key, aws_secret_access_key=s3_secret)
+
+s3_endpoint = os.getenv("AWS_ENDPOINT_URL") or os.getenv("AWS_ENDPOINT_URL_S3") or ""
+aws_region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or None
+
+# detect force-path env var (treat "1","true","yes" as true)
+force_path_raw = os.getenv("AWS_S3_FORCE_PATH_STYLE", "")
+force_path = str(force_path_raw).lower() in ("1", "true", "yes")
+
+# choose addressing style: path when forced, otherwise virtual
+addressing_style = "path" if force_path else "virtual"
+
+s3_conf = Config(
+    signature_version='s3v4',
+    region_name=aws_region,
+    s3={'addressing_style': addressing_style}
+)
+s3 = boto3.client(
+    's3',
+    endpoint_url=(s3_endpoint or None),
+    aws_access_key_id=(s3_key or None),
+    aws_secret_access_key=(s3_secret or None),
+    region_name=aws_region,
+    config=s3_conf,
+)
+print(f"[s3] endpoint={s3_endpoint!r} region={aws_region!r} addressing_style={addressing_style}")
 
 dir_item = '<li class="list-group-item d-flex justify-content-between align-items-center"><a href="/?path={path}">{name}</a></li>'
 file_item = '''
