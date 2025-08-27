@@ -13,7 +13,6 @@ from urllib.parse import urlparse, parse_qsl, quote, unquote
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from botocore.config import Config
 
-s3_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
 s3_bucket = sys.argv[-1] if len(sys.argv) > 1 else ""
 s3_key = os.getenv("AWS_ACCESS_KEY_ID", "")
 s3_secret = os.getenv("AWS_SECRET_ACCESS_KEY", "")
@@ -244,3 +243,4 @@ if __name__ == '__main__':
     with ThreadingHTTPServer(('0.0.0.0', 9092), S3Explorer) as server:
         print("Serving at http://127.0.0.1:9092")
         server.serve_forever()
+
