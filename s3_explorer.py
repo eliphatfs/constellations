@@ -214,15 +214,15 @@ class S3Explorer(BaseHTTPRequestHandler):
             self.wfile.write(sign_for_file(p.strip("/"), e).encode())
         else:
             if 'Range' in self.headers:
-                headers = {'Range': self.headers['Range']}
+                headers = {'Range': self.headers['Range'], 'Accept-Encoding': None}
             else:
-                headers = None
+                headers = {'Accept-Encoding': None}
             key = sign_for_file(unquote(uri.path.strip("/")), 1800)
             resp = requests.get(key, headers=headers, stream=True, verify=os.getenv("AWS_CA_BUNDLE"))
             self.send_response(resp.status_code)
             # print(resp.headers['content-type'])
             for k, v in resp.headers.items():
-                if k.lower() in ['etag', 'last-modified', 'date', 'server', 'x-content-type-options']:
+                if k.lower() in ['etag', 'last-modified', 'date', 'server', 'x-content-type-options', 'content-disposition']:
                     continue
                 if k.lower() == 'content-type':
                     ty, _ = mimetypes.guess_type(key, strict=False)
@@ -243,4 +243,3 @@ if __name__ == '__main__':
     with ThreadingHTTPServer(('0.0.0.0', 9092), S3Explorer) as server:
         print("Serving at http://127.0.0.1:9092")
         server.serve_forever()
-
