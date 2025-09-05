@@ -3,8 +3,6 @@ import sys
 import time
 import html
 import boto3
-import boto3.s3
-import boto3.s3.transfer
 import humanize
 import requests
 import mimetypes
@@ -18,6 +16,7 @@ s3_key = os.getenv("AWS_ACCESS_KEY_ID", "")
 s3_secret = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
 s3_endpoint = os.getenv("AWS_ENDPOINT_URL") or os.getenv("AWS_ENDPOINT_URL_S3") or ""
+s3_endpoint_share = os.getenv("OVERRIDE_SHARE_ENDPOINT") or s3_endpoint
 aws_region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or None
 
 # detect force-path env var (treat "1","true","yes" as true)
@@ -40,7 +39,15 @@ s3 = boto3.client(
     region_name=aws_region,
     config=s3_conf,
 )
-print(f"[s3] endpoint={s3_endpoint!r} region={aws_region!r} addressing_style={addressing_style}")
+s3_share = boto3.client(
+    's3',
+    endpoint_url=(s3_endpoint_share or None),
+    aws_access_key_id=(s3_key or None),
+    aws_secret_access_key=(s3_secret or None),
+    region_name=aws_region,
+    config=s3_conf,
+)
+print(f"[s3] endpoint={s3_endpoint!r} s3_share={s3_endpoint_share!r} region={aws_region!r} addressing_style={addressing_style}")
 
 dir_item = '<li class="list-group-item d-flex justify-content-between align-items-center"><a href="/?path={path}">{name}</a></li>'
 file_item = '''
@@ -106,7 +113,7 @@ page_base_format = """
 def keepalive():
     while True:
         time.sleep(5)
-        s3.head_bucket(Bucket=s3_bucket)
+        s3.list_buckets(MaxBuckets=1)
 
 
 def get_bucket_path(p):
@@ -120,6 +127,14 @@ def get_bucket_path(p):
 def sign_for_file(path, expire_time=600):
     bucket, dp = get_bucket_path(path)
     return s3.generate_presigned_url('get_object',
+                                     Params={'Bucket': bucket,
+                                             'Key': dp},
+                                     ExpiresIn=expire_time)
+
+
+def sign_for_share_file(path, expire_time=600):
+    bucket, dp = get_bucket_path(path)
+    return s3_share.generate_presigned_url('get_object',
                                      Params={'Bucket': bucket,
                                              'Key': dp},
                                      ExpiresIn=expire_time)
@@ -211,7 +226,7 @@ class S3Explorer(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.end_headers()
-            self.wfile.write(sign_for_file(p.strip("/"), e).encode())
+            self.wfile.write(sign_for_share_file(p.strip("/"), e).encode())
         else:
             if 'Range' in self.headers:
                 headers = {'Range': self.headers['Range'], 'Accept-Encoding': None}
@@ -238,8 +253,7 @@ class S3Explorer(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    if s3_bucket != '__dynamic__':
-        threading.Thread(target=keepalive, daemon=True).start()
+    threading.Thread(target=keepalive, daemon=True).start()
     with ThreadingHTTPServer(('0.0.0.0', 9092), S3Explorer) as server:
         print("Serving at http://127.0.0.1:9092")
         server.serve_forever()
